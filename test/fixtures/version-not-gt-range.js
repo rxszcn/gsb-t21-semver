@@ -83,4 +83,8 @@ module.exports = [
   ['^0.1.0 || ~3.0.1 || 5.0.0', '5.0.0-0', true],
   ['^0.1.0 || ~3.0.1 || >4 <=5.0.0', '3.5.0'],
   ['0.7.x', '0.7.2-beta', { includePrerelease: true }],
+  // 0.7.2-beta is inside the 0.7.x neighborhood (>=0.7.0 <0.8.0-0);
+  // the prerelease tuple rule only makes satisfies false, it is not
+  // above the range.
+  ['0.7.x', '0.7.2-beta'],
 ]

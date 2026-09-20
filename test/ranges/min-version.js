@@ -79,3 +79,22 @@ test('minimum version in range tests', (t) => {
   })
   t.end()
 })
+
+test('minimum version with includePrerelease', (t) => {
+  // The next step above a release is the lowest prerelease of the next
+  // patch, so that is the minimum matchable version when prereleases count.
+  [
+    ['>1.2.3', { includePrerelease: true }, '1.2.4-0'],
+    ['>1.2.3', undefined, '1.2.4'],
+    ['>1.2.3-beta', { includePrerelease: true }, '1.2.3-beta.0'],
+    ['^1.2.3', { includePrerelease: true }, '1.2.3'],
+    ['1.2.x', { includePrerelease: true }, '1.2.0-0'],
+    // the prerelease tier between adjacent releases is empty by default
+    ['>1.2.3 <1.2.4-0', undefined, null],
+  ].forEach(([range, options, wanted]) => {
+    const min = minVersion(range, options)
+    t.equal(min === null ? null : min.version, wanted,
+      `minVersion(${range}) = ${wanted}`)
+  })
+  t.end()
+})

@@ -86,4 +86,8 @@ module.exports = [
   ['~1.0.0-alpha', '1.0.0-beta'],
   ['=0.1.0', '1.0.0'],
   ['>1.2.3', '1.3.0-alpha', { includePrerelease: true }],
+  // 1.3.0-alpha is above the >1.2.3 lower bound; without
+  // includePrerelease it merely fails the prerelease tuple rule, it is
+  // not below the range.
+  ['>1.2.3', '1.3.0-alpha'],
 ]

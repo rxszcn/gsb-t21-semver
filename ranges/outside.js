@@ -1,82 +1,60 @@
 'use strict'
 
 const SemVer = require('../classes/semver')
-const Comparator = require('../classes/comparator')
-const { ANY } = Comparator
 const Range = require('../classes/range')
 const satisfies = require('../functions/satisfies')
-const gt = require('../functions/gt')
-const lt = require('../functions/lt')
-const lte = require('../functions/lte')
-const gte = require('../functions/gte')
+const { conjunctionCell } = require('../internal/neighborhood')
 
+// gtr: version is greater than the whole range
+// ltr: version is less than the whole range
+//
+// Each conjunction of comparators is reduced to a contiguous neighborhood
+// cell [lo, hi].  gtr/ltr compare against that cell rather than against the
+// individual comparators, so versions caught by the prerelease tuple rule
+// (inside the cell but not satisfying without includePrerelease) are neither
+// above nor below it.
 const outside = (version, range, hilo, options) => {
   version = new SemVer(version, options)
   range = new Range(range, options)
 
-  let gtfn, ltefn, ltfn, comp, ecomp
-  switch (hilo) {
-    case '>':
-      gtfn = gt
-      ltefn = lte
-      ltfn = lt
-      comp = '>'
-      ecomp = '>='
-      break
-    case '<':
-      gtfn = lt
-      ltefn = gte
-      ltfn = gt
-      comp = '<'
-      ecomp = '<='
-      break
-    default:
-      throw new TypeError('Must provide a hilo val of "<" or ">"')
+  const above = hilo === '>'
+  if (hilo !== '>' && hilo !== '<') {
+    throw new TypeError('Must provide a hilo val of "<" or ">"')
   }
 
-  // If it satisfies the range it is not outside
+  // If it satisfies the range it is not outside.
   if (satisfies(version, range, options)) {
     return false
   }
 
-  // From now on, variable terms are as if we're in "gtr" mode.
-  // but note that everything is flipped for the "ltr" function.
+  const cells = range.set
+    .map(comparators => conjunctionCell(comparators))
+    .filter(cell => cell !== null)
 
-  for (let i = 0; i < range.set.length; ++i) {
-    const comparators = range.set[i]
-
-    let high = null
-    let low = null
-
-    comparators.forEach((comparator) => {
-      if (comparator.semver === ANY) {
-        comparator = new Comparator('>=0.0.0')
-      }
-      high = high || comparator
-      low = low || comparator
-      if (gtfn(comparator.semver, high.semver, options)) {
-        high = comparator
-      } else if (ltfn(comparator.semver, low.semver, options)) {
-        low = comparator
-      }
-    })
-
-    // If the edge version comparator has a operator then our version
-    // isn't outside it
-    if (high.operator === comp || high.operator === ecomp) {
-      return false
-    }
-
-    // If the lowest version comparator has an operator and our version
-    // is less than it then it isn't higher than the range
-    if ((!low.operator || low.operator === comp) &&
-        ltefn(version, low.semver)) {
-      return false
-    } else if (low.operator === ecomp && ltfn(version, low.semver)) {
-      return false
-    }
+  // A range with no non-contradictory cells can't be placed on either side.
+  if (!cells.length) {
+    return false
   }
-  return true
+
+  if (above) {
+    // gtr iff above every cell, i.e. above the highest upper bound.
+    return cells.every(({ hi, hiInclusive }) => {
+      if (!hi) {
+        return false
+      }
+      const cmp = version.compare(hi)
+      return hiInclusive ? cmp > 0 : cmp >= 0
+    })
+  }
+
+  // ltr iff below every cell, i.e. below the lowest lower bound.
+  return cells.every(({ lo, loInclusive }) => {
+    if (!lo) {
+      return false
+    }
+    const cmp = version.compare(lo)
+    return loInclusive ? cmp < 0 : cmp <= 0
+  })
 }
 
 module.exports = outside

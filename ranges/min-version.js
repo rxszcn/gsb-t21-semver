@@ -2,62 +2,63 @@
 
 const SemVer = require('../classes/semver')
 const Range = require('../classes/range')
-const gt = require('../functions/gt')
+const parseOptions = require('../internal/parse-options')
+const { successor, conjunctionCell } = require('../internal/neighborhood')
 
-const minVersion = (range, loose) => {
-  range = new Range(range, loose)
+// Lowest version that can actually satisfy each conjunction.
+//
+// For a conjunction whose neighborhood cell has a lower bound:
+//   - an inclusive lower bound is itself the candidate;
+//   - an exclusive lower bound is the successor of that version, using the
+//     pinned prerelease-tier step (append 0 for prereleases; for a release
+//     that is X.Y.(Z+1)-0 with includePrerelease, else X.Y.(Z+1)).
+// The candidate is then checked against the upper bound and, finally, the
+// whole range test, so upper bounds that cut into the prerelease tier (e.g.
+// `>1.2.3 <1.2.4-0`) correctly yield no minimum.
+const minVersion = (range, options) => {
+  options = parseOptions(options)
+  range = new Range(range, options)
 
-  let minver = new SemVer('0.0.0')
-  if (range.test(minver)) {
-    return minver
-  }
+  let minver = null
+  for (const comparators of range.set) {
+    const cell = conjunctionCell(comparators)
+    if (cell === null) {
+      continue
+    }
 
-  minver = new SemVer('0.0.0-0')
-  if (range.test(minver)) {
-    return minver
-  }
-
-  minver = null
-  for (let i = 0; i < range.set.length; ++i) {
-    const comparators = range.set[i]
-
-    let setMin = null
-    comparators.forEach((comparator) => {
-      // Clone to avoid manipulating the comparator's semver object.
-      const compver = new SemVer(comparator.semver.version)
-      switch (comparator.operator) {
-        case '>':
-          if (compver.prerelease.length === 0) {
-            compver.patch++
-          } else {
-            compver.prerelease.push(0)
-          }
-          compver.raw = compver.format()
-          /* fallthrough */
-        case '':
-        case '>=':
-          if (!setMin || gt(compver, setMin)) {
-            setMin = compver
-          }
-          break
-        case '<':
-        case '<=':
-          /* Ignore maximum versions */
-          break
-        /* istanbul ignore next */
-        default:
-          throw new Error(`Unexpected operation: ${comparator.operator}`)
+    let candidate
+    if (!cell.lo) {
+      // Unbounded below: probe the absolute floors directly.
+      candidate = new SemVer('0.0.0', options)
+      if (!satisfiesCell(candidate, cell)) {
+        candidate = new SemVer('0.0.0-0', options)
       }
-    })
-    if (setMin && (!minver || gt(minver, setMin))) {
-      minver = setMin
+    } else if (cell.loInclusive) {
+      candidate = new SemVer(cell.lo.version, options)
+    } else {
+      candidate = successor(cell.lo, options)
+    }
+
+    if (!satisfiesCell(candidate, cell)) {
+      continue
+    }
+    if (!range.test(candidate)) {
+      continue
+    }
+    if (!minver || candidate.compare(minver) < 0) {
+      minver = candidate
     }
   }
 
-  if (minver && range.test(minver)) {
-    return minver
-  }
-
-  return null
+  return minver
 }
+
+const satisfiesCell = (version, { hi, hiInclusive }) => {
+  if (!hi) {
+    return true
+  }
+  const cmp = version.compare(hi)
+  return hiInclusive ? cmp <= 0 : cmp < 0
+}
+
 module.exports = minVersion
