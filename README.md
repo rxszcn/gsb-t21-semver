@@ -519,6 +519,13 @@ strings that they parse.
   the bounds of the range in either the high or low direction.  The
   `hilo` argument must be either the string `'>'` or `'<'`.  (This is
   the function called by `gtr` and `ltr`.)
+
+  Note that `satisfies`, `gtr`, and `ltr` are mutually exclusive: a
+  version is never reported as both above and below the same range.  A
+  version that is excluded from a range only by the prerelease rule,
+  while sorting between two possible members of the range, is neither
+  `gtr` nor `ltr`.  An empty range (one no version can satisfy) is
+  neither above nor below any version.
 * `intersects(range)`: Return true if any of the range comparators intersect.
 * `simplifyRange(versions, range)`: Return a "simplified" range that
   matches the same items in the `versions` list as the range specified.  Note
@@ -677,4 +684,3 @@ The following modules are available:
 * `require('semver/ranges/subset')`
 * `require('semver/ranges/to-comparators')`
 * `require('semver/ranges/valid')`
-

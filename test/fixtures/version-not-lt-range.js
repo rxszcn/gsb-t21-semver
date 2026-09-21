@@ -86,4 +86,7 @@ module.exports = [
   ['~1.0.0-alpha', '1.0.0-beta'],
   ['=0.1.0', '1.0.0'],
   ['>1.2.3', '1.3.0-alpha', { includePrerelease: true }],
+  // 1.2.4 is a member of >1.2.3 and is less than 1.3.0-alpha,
+  // so the version is not less than every version in the range.
+  ['>1.2.3', '1.3.0-alpha'],
 ]
